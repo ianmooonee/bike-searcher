@@ -1,0 +1,734 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bike Searcher</title>
+<style>
+/* ---------- tokens ---------- */
+:root {
+  color-scheme: light dark;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e;
+  --muted: #898781; --line: #e1e0d9; --hairline: rgba(11,11,11,.10);
+  --accent: #2a78d6; --btn: #2a78d6; --btn-ink: #ffffff; --series: #2a78d6;
+  --grid: #e1e0d9; --axis: #c3c2b7;
+  --yes: #0ca30c; --yes-text: #006300;
+  --no: #d03b3b; --no-text: #c0392b; --no-bg: #fdf3f2;
+  --unk: #cf8579; --unk-text: #9c4a38; --unk-bg: #fbf7f5;
+  --dup-text: #7a5407; --mark: #ffe28a; --star: #eda100;
+  --shadow: 0 1px 3px rgba(0,0,0,.07);
+  --badge-olx: #5c2e91; --badge-sv: #0b5c9e; /* photo-overlay chips: constant in both modes */
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7;
+    --muted: #898781; --line: #2c2c2a; --hairline: rgba(255,255,255,.10);
+    --accent: #3987e5; --btn: #1c5cab; --series: #3987e5;
+    --grid: #2c2c2a; --axis: #383835;
+    --yes-text: #4fbe7f;
+    --no-text: #e66767; --no-bg: #2b1e1e;
+    --unk: #9a6258; --unk-text: #cf8579; --unk-bg: #241e1d;
+    --dup-text: #d6a53a; --mark: #7a6420;
+    --shadow: 0 1px 3px rgba(0,0,0,.5);
+  }
+}
+
+/* ---------- base ---------- */
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+button { font: inherit; cursor: pointer; }
+input, select { font: inherit; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 7px; padding: 6px 9px; }
+input:focus-visible, select:focus-visible, button:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px; }
+mark { background: var(--mark); color: inherit; border-radius: 2px; padding: 0 1px; }
+
+#app { display: grid; grid-template-columns: 268px minmax(0, 1fr); min-height: 100vh; }
+
+/* ---------- sidebar ---------- */
+#sidebar { border-right: 1px solid var(--line); background: var(--surface);
+  padding: 18px 16px 24px; position: sticky; top: 0; height: 100vh;
+  overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+#brand { font-size: 18px; font-weight: 700; letter-spacing: -.01em; }
+#brand small { display: block; font-size: 12px; font-weight: 400; color: var(--muted); margin-top: 2px; }
+.fgroup { display: flex; flex-direction: column; gap: 6px; }
+.fgroup > label.head { font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--muted); }
+.fgroup select, .fgroup input[type=search] { width: 100%; }
+.range { display: grid; grid-template-columns: 1fr auto 1fr; gap: 6px; align-items: center; }
+.range input { width: 100%; min-width: 0; padding: 5px 7px; }
+.range span { color: var(--muted); font-size: 12px; }
+label.chk { display: flex; gap: 7px; align-items: center; color: var(--ink-2);
+  cursor: pointer; font-size: 13px; }
+#reset { background: transparent; border: 1px solid var(--line); border-radius: 7px;
+  color: var(--ink-2); padding: 6px 10px; }
+#reset:hover { border-color: var(--muted); }
+#scrapebox { margin-top: auto; border-top: 1px solid var(--line); padding-top: 14px;
+  display: flex; flex-direction: column; gap: 8px; }
+#scrapebox .row { display: flex; gap: 8px; align-items: center; }
+#yearfrom { width: 90px; }
+#run { background: var(--btn); color: var(--btn-ink); border: none;
+  border-radius: 7px; padding: 7px 16px; font-weight: 600; flex: 1; }
+#run:disabled { opacity: .5; cursor: not-allowed; }
+#runstatus { color: var(--muted); font-size: 12px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; min-height: 16px; }
+
+/* ---------- main ---------- */
+main { min-width: 0; }
+#topbar { position: sticky; top: 0; z-index: 5; background: var(--page);
+  border-bottom: 1px solid var(--line); padding: 10px 22px;
+  display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+#count { font-weight: 600; }
+#count small { color: var(--muted); font-weight: 400; }
+#topbar .spacer { flex: 1; }
+#topbar label { color: var(--muted); font-size: 13px; }
+
+/* ---------- stats ---------- */
+#stats { padding: 16px 22px 4px; display: grid; gap: 12px;
+  grid-template-columns: repeat(4, minmax(120px, 1fr)); }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 11px;
+  box-shadow: var(--shadow); padding: 11px 14px; }
+.tile .lbl { font-size: 12px; color: var(--ink-2); }
+.tile .val { font-size: 22px; font-weight: 600; margin-top: 2px; }
+.tile .sub { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+#charts { padding: 12px 22px 4px; display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); }
+.chart { background: var(--surface); border: 1px solid var(--line); border-radius: 11px;
+  box-shadow: var(--shadow); padding: 12px 14px 8px; min-width: 0; }
+.chart h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.chart svg { display: block; width: 100%; }
+.chart text { font: 11px system-ui, sans-serif; fill: var(--ink-2);
+  font-variant-numeric: tabular-nums; }
+#tip { position: fixed; z-index: 30; pointer-events: none; background: var(--surface);
+  color: var(--ink); border: 1px solid var(--line); border-radius: 7px;
+  box-shadow: var(--shadow); padding: 6px 9px; font-size: 12px; display: none;
+  max-width: 240px; }
+#tip b { font-variant-numeric: tabular-nums; }
+
+/* ---------- cards ---------- */
+#grid { display: grid; gap: 14px; padding: 14px 22px 90px;
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: var(--shadow); overflow: hidden; display: flex; flex-direction: column;
+  position: relative; }
+.card.trade-no { border: 2px solid var(--no); background: var(--no-bg); }
+.card.trade-unknown { border: 1px solid var(--unk); background: var(--unk-bg); }
+.card.trade-yes { border: 2px solid var(--yes); }
+.card.dimmed { opacity: .55; }
+.thumb { aspect-ratio: 4/3; background: var(--line); display: block; position: relative; }
+.thumb.imgerr { aspect-ratio: auto; height: 46px; }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sitechip { position: absolute; top: 8px; left: 8px; font-size: 11px; font-weight: 700;
+  color: #fff; padding: 3px 9px; border-radius: 20px; }
+.sitechip.olx { background: var(--badge-olx); }
+.sitechip.standvirtual { background: var(--badge-sv); }
+.favbtn { position: absolute; top: 6px; right: 6px; width: 32px; height: 32px;
+  border-radius: 50%; border: none; background: rgba(0,0,0,.45); color: #fff;
+  font-size: 16px; line-height: 1; display: flex; align-items: center; justify-content: center; }
+.favbtn.on { color: var(--star); }
+.card.noimg .favbtn { position: static; background: transparent; color: var(--muted);
+  width: auto; height: auto; }
+.card.noimg .favbtn.on { color: var(--star); }
+.body { padding: 11px 13px 12px; display: flex; flex-direction: column; gap: 7px; flex: 1; }
+.top { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.title { font-weight: 600; font-size: 14.5px; overflow-wrap: anywhere; }
+.title a { color: var(--ink); text-decoration: none; }
+.title a:hover { color: var(--accent); }
+.price { font-weight: 700; font-size: 16.5px; white-space: nowrap;
+  font-variant-numeric: tabular-nums; }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip { font-size: 11.5px; color: var(--ink-2); border: 1px solid var(--line);
+  border-radius: 20px; padding: 2px 8px; background: transparent;
+  font-variant-numeric: tabular-nums; }
+.badges { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 600;
+  background: transparent; border: 1px solid currentColor; }
+.badge.tno { color: var(--no-text); cursor: help; }
+.badge.tyes { color: var(--yes-text); cursor: help; }
+.badge.tunk { color: var(--unk-text); font-weight: 500; cursor: help; }
+.badge.dup { color: var(--dup-text); cursor: default; }
+.badge.dup a { color: inherit; }
+.badge.seller { color: var(--ink-2); border-color: var(--line); font-weight: 500; }
+.badge.site { color: #fff; border: none; }
+.badge.site.olx { background: var(--badge-olx); }
+.badge.site.standvirtual { background: var(--badge-sv); }
+.desc { color: var(--ink); font-size: 13px; white-space: pre-line; cursor: pointer;
+  overflow-wrap: anywhere; }
+.desc.clamp { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical;
+  overflow: hidden; }
+.desc.empty { color: var(--muted); font-style: italic; cursor: default; }
+.foot { margin-top: auto; padding-top: 6px; display: flex; gap: 8px; align-items: center;
+  color: var(--muted); font-size: 11.5px; }
+.foot .spacer { flex: 1; }
+.minibtn { background: transparent; border: 1px solid var(--line); border-radius: 6px;
+  color: var(--ink-2); font-size: 11.5px; padding: 3px 9px; }
+.minibtn:hover { border-color: var(--muted); }
+.minibtn.on { background: var(--btn); border-color: var(--btn); color: var(--btn-ink); }
+#empty { padding: 60px 22px; text-align: center; color: var(--muted); display: none; }
+
+/* ---------- compare ---------- */
+#tray { position: fixed; left: 50%; transform: translateX(-50%); bottom: 14px; z-index: 20;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.18); padding: 8px 12px; display: none;
+  align-items: center; gap: 10px; max-width: min(92vw, 640px); }
+#tray.open { display: flex; }
+#tray img { width: 44px; height: 34px; object-fit: cover; border-radius: 6px; }
+#tray .noimg { width: 44px; height: 34px; border-radius: 6px; background: var(--line);
+  display: inline-block; }
+#traythumbs { display: flex; gap: 6px; }
+#comparego { background: var(--btn); color: var(--btn-ink); border: none;
+  border-radius: 7px; padding: 7px 14px; font-weight: 600; white-space: nowrap; }
+#comparego:disabled { opacity: .55; cursor: not-allowed; }
+#trayclear { background: transparent; border: none; color: var(--muted); font-size: 13px; }
+#overlay { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.45);
+  display: none; align-items: center; justify-content: center; padding: 20px; }
+#overlay.open { display: flex; }
+#cmp { background: var(--surface); border-radius: 12px; max-width: min(96vw, 1100px);
+  max-height: 90vh; display: flex; flex-direction: column; overflow: hidden;
+  border: 1px solid var(--line); }
+#cmp header { display: flex; align-items: center; padding: 12px 18px;
+  border-bottom: 1px solid var(--line); }
+#cmp header h2 { margin: 0; font-size: 16px; flex: 1; }
+#cmpclose { background: transparent; border: none; color: var(--muted); font-size: 20px; }
+#cmpbody { overflow: auto; padding: 4px 8px 14px; }
+#cmp table { border-collapse: collapse; min-width: 100%; }
+#cmp th, #cmp td { text-align: left; vertical-align: top; padding: 8px 10px;
+  border-bottom: 1px solid var(--line); font-size: 13px; min-width: 170px; max-width: 260px;
+  overflow-wrap: anywhere; }
+#cmp th:first-child, #cmp td:first-child { min-width: 90px; max-width: 110px;
+  color: var(--muted); font-weight: 500; font-size: 12px; position: sticky; left: 0;
+  background: var(--surface); }
+#cmp td img { width: 100%; max-width: 220px; border-radius: 8px; display: block; }
+#cmp td .num { font-variant-numeric: tabular-nums; font-weight: 600; }
+#cmp td .cdesc { max-height: 180px; overflow-y: auto; white-space: pre-line; font-size: 12.5px; }
+#cmp .tstance.yes { color: var(--yes-text); font-weight: 600; }
+#cmp .tstance.no { color: var(--no-text); font-weight: 600; }
+#cmp .tstance.unk { color: var(--unk-text); }
+
+/* ---------- responsive ---------- */
+@media (max-width: 900px) {
+  #app { grid-template-columns: 1fr; }
+  #sidebar { position: static; height: auto; border-right: none;
+    border-bottom: 1px solid var(--line); }
+  #scrapebox { margin-top: 4px; }
+  #stats { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+}
+@media (max-width: 480px) {
+  #topbar, #stats, #charts, #grid { padding-left: 12px; padding-right: 12px; }
+}
+@media print {
+  #tray, #overlay, #tip, #scrapebox, #topbar label, #topbar select { display: none !important; }
+  #sidebar { position: static; height: auto; }
+  .card { break-inside: avoid; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <div id="brand">🏍 Bike Searcher<small id="meta"></small></div>
+
+    <div class="fgroup">
+      <label class="head" for="q">Search</label>
+      <input type="search" id="q" placeholder="Title & description…">
+    </div>
+
+    <div class="fgroup">
+      <label class="head" for="model">Filters</label>
+      <select id="model"><option value="">All models</option></select>
+      <select id="site"><option value="">Both sites</option>
+        <option value="standvirtual">Standvirtual</option><option value="olx">OLX</option></select>
+      <select id="seller"><option value="">Any seller</option>
+        <option value="private">Private</option><option value="dealer">Dealer</option></select>
+      <select id="trades"><option value="">Trades: any</option>
+        <option value="yes">Explicitly accepts trades</option>
+        <option value="unknown">Trades not mentioned</option>
+        <option value="no">Refuses trades</option></select>
+    </div>
+
+    <div class="fgroup">
+      <label class="head">Price €</label>
+      <div class="range"><input type="number" id="pmin" placeholder="min" min="0">
+        <span>–</span><input type="number" id="pmax" placeholder="max" min="0"></div>
+      <label class="head">Year</label>
+      <div class="range"><input type="number" id="ymin" placeholder="min" min="1970" max="2100">
+        <span>–</span><input type="number" id="ymax" placeholder="max" min="1970" max="2100"></div>
+      <label class="head">Mileage km</label>
+      <div class="range"><input type="number" id="kmin" placeholder="min" min="0">
+        <span>–</span><input type="number" id="kmax" placeholder="max" min="0"></div>
+    </div>
+
+    <div class="fgroup">
+      <label class="chk"><input type="checkbox" id="hidedup" checked> Hide duplicates</label>
+      <label class="chk"><input type="checkbox" id="favonly"> ★ Favorites only</label>
+      <label class="chk"><input type="checkbox" id="showhidden"> Show hidden (<span id="nhidden">0</span>)</label>
+      <button id="reset">Reset filters</button>
+    </div>
+
+    <div id="scrapebox">
+      <label class="head" for="yearfrom">Re-scrape</label>
+      <div class="row">
+        <input type="number" id="yearfrom" min="1970" max="2100" placeholder="year ≥">
+        <button id="run">Scrape</button>
+      </div>
+      <div id="runstatus"></div>
+    </div>
+  </aside>
+
+  <main>
+    <div id="topbar">
+      <span id="count"></span>
+      <span class="spacer"></span>
+      <label for="sort">Sort</label>
+      <select id="sort">
+        <option value="price_asc">Price ↑</option><option value="price_desc">Price ↓</option>
+        <option value="year_desc">Year ↓</option><option value="km_asc">Mileage ↑</option>
+        <option value="date_desc">Newest first</option>
+      </select>
+    </div>
+    <div id="stats"></div>
+    <div id="charts">
+      <div class="chart"><h3>Price distribution (€, shown listings)</h3><div id="histo"></div></div>
+      <div class="chart"><h3>Listings per registration year</h3><div id="years"></div></div>
+    </div>
+    <div id="grid"></div>
+    <div id="empty">No listings match the current filters.</div>
+  </main>
+</div>
+
+<div id="tray">
+  <div id="traythumbs"></div>
+  <button id="comparego">Compare</button>
+  <button id="trayclear" title="Clear selection">clear</button>
+</div>
+<div id="overlay">
+  <div id="cmp">
+    <header><h2>Compare</h2><button id="cmpclose" title="Close">✕</button></header>
+    <div id="cmpbody"></div>
+  </div>
+</div>
+<div id="tip"></div>
+
+<script id="data" type="application/json">__DATA__</script>
+<script>
+const DATA = JSON.parse(document.getElementById('data').textContent);
+const L = DATA.listings;
+const $ = id => document.getElementById(id);
+const key = x => x.site + ':' + x.ad_id;
+
+/* ---------- persisted state (per browser origin) ---------- */
+function loadSet(name) {
+  try { return new Set(JSON.parse(localStorage.getItem(name) || '[]')); }
+  catch { return new Set(); }
+}
+function saveSet(name, set) {
+  try { localStorage.setItem(name, JSON.stringify([...set])); } catch {}
+}
+const favs = loadSet('bs:favs');
+const hidden = loadSet('bs:hidden');
+const compare = new Set(); // session only, max 4
+const collapsedDescs = new Set(); // survives re-renders within the session
+
+/* ---------- static header ---------- */
+{
+  const no = L.filter(x => x.trade_stance === 'no').length;
+  const yes = L.filter(x => x.trade_stance === 'yes').length;
+  $('meta').textContent =
+    `${L.length} listings${DATA.year_from ? ` (year ≥ ${DATA.year_from})` : ''} · ` +
+    `✓${yes} ✗${no} ?${L.length - no - yes} · scraped ${new Date(DATA.scraped_at).toLocaleString()}`;
+  [...new Set(L.map(x => x.model))].forEach(m => {
+    const o = document.createElement('option'); o.value = o.textContent = m;
+    $('model').appendChild(o);
+  });
+}
+
+/* ---------- text helpers ---------- */
+const fmt = n => n == null ? '—' : n.toLocaleString('en');
+const esc = s => (s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function fold(s) { // accent-insensitive lowercase, UTF-16 indices preserved
+  let f = '';
+  for (const ch of s) f += ch.length === 2 ? ch : (ch.normalize('NFD')[0] || ch);
+  return f.toLowerCase();
+}
+let Q = '';
+function hl(s) {
+  s = s ?? '';
+  if (!Q) return esc(s);
+  const f = fold(s);
+  let out = '', i = 0;
+  for (let idx = f.indexOf(Q); idx !== -1; idx = f.indexOf(Q, i)) {
+    out += esc(s.slice(i, idx)) + '<mark>' + esc(s.slice(idx, idx + Q.length)) + '</mark>';
+    i = idx + Q.length;
+  }
+  return out + esc(s.slice(i));
+}
+
+/* ---------- duplicates ---------- */
+const dupScore = y => (y.description ? 2 : 0) + (y.site === 'standvirtual' ? 1 : 0);
+const groupMates = id => L.filter(y => y.duplicate_group === id);
+
+/* ---------- cards ---------- */
+function card(x) {
+  const k = key(x);
+  const el = document.createElement('div');
+  el.className = 'card' + (x.trade_stance === 'no' ? ' trade-no'
+                         : x.trade_stance === 'yes' ? ' trade-yes'
+                         : ' trade-unknown')
+               + (x.thumbnail ? '' : ' noimg')
+               + (hidden.has(k) ? ' dimmed' : '');
+  let dup = '';
+  if (x.duplicate_group) {
+    const links = groupMates(x.duplicate_group).filter(y => y !== x).map(y =>
+      `<a href="${esc(y.url)}" target="_blank" rel="noopener">${esc(y.site)}</a>`).join(', ');
+    dup = `<span class="badge dup" title="Same bike listed more than once">also on ${links}</span>`;
+  }
+  let trade;
+  if (x.trade_stance === 'no')
+    trade = `<span class="badge tno" title="${esc(x.trade_note)}">✗ no trades</span>`;
+  else if (x.trade_stance === 'yes')
+    trade = `<span class="badge tyes" title="${esc(x.trade_note)}">✓ trades OK</span>`;
+  else
+    trade = `<span class="badge tunk" title="${x.description
+        ? 'The description does not mention trades'
+        : 'No description, so trade stance is unknown'}">? trades not mentioned</span>`;
+  const chips = [x.year, x.mileage_km != null ? fmt(x.mileage_km) + ' km' : null,
+                 x.engine, x.location]
+    .filter(Boolean).map(c => `<span class="chip">${esc(String(c))}</span>`).join('');
+  const fav = favs.has(k);
+  el.innerHTML = `
+    ${x.thumbnail ? `<a class="thumb" href="${esc(x.url)}" target="_blank" rel="noopener">
+        <img loading="lazy" src="${esc(x.thumbnail)}" alt=""
+             onerror="this.parentElement.classList.add('imgerr');this.remove()">
+        <span class="sitechip ${x.site}">${x.site}</span></a>` : ''}
+    <button class="favbtn ${fav ? 'on' : ''}" title="${fav ? 'Remove from favorites' : 'Add to favorites'}">${fav ? '★' : '☆'}</button>
+    <div class="body">
+      <div class="top">
+        <span class="title"><a href="${esc(x.url)}" target="_blank" rel="noopener">${hl(x.title)}</a></span>
+        <span class="price">${x.price_eur != null ? fmt(x.price_eur) + ' €' : '—'}</span>
+      </div>
+      <div class="chips">${chips}</div>
+      <div class="badges">
+        ${x.thumbnail ? '' : `<span class="badge site ${x.site}">${x.site}</span>`}
+        <span class="badge seller">${x.seller_type}</span>
+        ${trade}
+        ${dup}
+      </div>
+      <div class="desc ${x.description ? (collapsedDescs.has(k) ? 'clamp' : '') : 'empty'}" title="${x.description ? 'Click to collapse/expand' : ''}">${
+        x.description ? hl(x.description) : 'No description provided by the seller.'}</div>
+      <div class="foot">
+        <span>${x.published_at ? 'published ' + new Date(x.published_at).toLocaleDateString() : ''}</span>
+        <span class="spacer"></span>
+        <button class="minibtn cmpbtn ${compare.has(k) ? 'on' : ''}">${compare.has(k) ? '✓ compare' : '+ compare'}</button>
+        <button class="minibtn hidebtn">${hidden.has(k) ? 'unhide' : '✕ hide'}</button>
+      </div>
+    </div>`;
+  const d = el.querySelector('.desc');
+  if (x.description) d.addEventListener('click', () => {
+    collapsedDescs.has(k) ? collapsedDescs.delete(k) : collapsedDescs.add(k);
+    d.classList.toggle('clamp');
+  });
+  el.querySelector('.favbtn').addEventListener('click', e => {
+    e.preventDefault();
+    favs.has(k) ? favs.delete(k) : favs.add(k);
+    saveSet('bs:favs', favs);
+    render();
+  });
+  el.querySelector('.hidebtn').addEventListener('click', () => {
+    hidden.has(k) ? hidden.delete(k) : hidden.add(k);
+    saveSet('bs:hidden', hidden);
+    render();
+  });
+  el.querySelector('.cmpbtn').addEventListener('click', () => {
+    if (compare.has(k)) compare.delete(k);
+    else if (compare.size >= 4) { $('runstatus').textContent = 'compare holds at most 4 bikes'; return; }
+    else compare.add(k);
+    render();
+  });
+  return el;
+}
+
+/* ---------- stats & charts ---------- */
+const median = a => {
+  if (!a.length) return null;
+  const s = [...a].sort((x, y) => x - y);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2);
+};
+const compact = n => n == null ? '—'
+  : n >= 1000 ? +(n / 1000).toFixed(2) + 'k' : String(n); // exact: 22500 -> "22.5k"
+
+function tiles(rows) {
+  const prices = rows.map(x => x.price_eur).filter(v => v != null);
+  const kms = rows.map(x => x.mileage_km).filter(v => v != null);
+  const open = rows.filter(x => x.trade_stance === 'yes').length;
+  $('stats').innerHTML = [
+    ['Shown', fmt(rows.length), `of ${fmt(L.length)} scraped`],
+    ['Median price', prices.length ? fmt(median(prices)) + ' €' : '—', ''],
+    ['Median mileage', kms.length ? fmt(median(kms)) + ' km' : '—', ''],
+    ['Open to trades', String(open), rows.length ? Math.round(100 * open / rows.length) + '% of shown' : ''],
+  ].map(([l, v, s]) =>
+    `<div class="tile"><div class="lbl">${l}</div><div class="val">${v}</div>${s ? `<div class="sub">${s}</div>` : ''}</div>`
+  ).join('');
+}
+
+const tip = $('tip');
+function bindTips(container) {
+  container.querySelectorAll('[data-tip]').forEach(elm => {
+    elm.addEventListener('mousemove', e => {
+      tip.innerHTML = elm.dataset.tip;
+      tip.style.display = 'block';
+      const w = tip.offsetWidth, h = tip.offsetHeight;
+      tip.style.left = Math.min(e.clientX + 12, document.documentElement.clientWidth - w - 8) + 'px';
+      tip.style.top = Math.min(e.clientY + 14, window.innerHeight - h - 8) + 'px';
+    });
+    elm.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+  });
+}
+
+function niceStep(range, target) {
+  const raw = Math.max(range, 1) / target;
+  const pow = Math.pow(10, Math.floor(Math.log10(raw)));
+  for (const m of [1, 2, 2.5, 5, 10]) if (raw <= m * pow) return m * pow;
+  return 10 * pow;
+}
+function roundTop(x, y, w, h, r) { // 4px rounded data-end, square baseline
+  r = Math.min(r, w / 2, h);
+  const y2 = y + h;
+  return `M${x},${y2} L${x},${y + r} Q${x},${y} ${x + r},${y} L${x + w - r},${y} Q${x + w},${y} ${x + w},${y + r} L${x + w},${y2} Z`;
+}
+
+function barChart(host, buckets, tipFor, xLabelFor) {
+  // buckets: [{label, count}]; single series -> no legend (title names it)
+  tip.style.display = 'none'; // a re-render destroys the hovered rect, so its mouseleave never fires
+  const W = Math.max(260, host.clientWidth || 300), H = 150;
+  const padL = 30, padR = 6, padT = 8, padB = 20;
+  const iw = W - padL - padR, ih = H - padT - padB;
+  const maxC = Math.max(1, ...buckets.map(b => b.count));
+  // integer ticks at exact gridline heights (counts are whole numbers)
+  const tickStep = Math.max(1, niceStep(maxC, 2));
+  const yMax = Math.ceil(maxC / tickStep) * tickStep;
+  const band = iw / Math.max(1, buckets.length);
+  const bw = Math.max(3, Math.min(24, band - 2)); // <=24px thick, >=2px surface gap
+  let s = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img">`;
+  for (let v = tickStep; v <= yMax; v += tickStep) { // recessive hairline gridlines + ticks
+    const gy = padT + ih * (1 - v / yMax);
+    s += `<line x1="${padL}" y1="${gy}" x2="${W - padR}" y2="${gy}" stroke="var(--grid)" stroke-width="1"/>`;
+    s += `<text x="${padL - 5}" y="${gy + 3.5}" text-anchor="end">${compact(v)}</text>`;
+  }
+  s += `<line x1="${padL}" y1="${padT + ih}" x2="${W - padR}" y2="${padT + ih}" stroke="var(--axis)" stroke-width="1"/>`;
+  buckets.forEach((b, i) => {
+    const h = Math.round(ih * b.count / yMax);
+    const x = padL + i * band + (band - bw) / 2;
+    if (b.count > 0)
+      s += `<path d="${roundTop(x, padT + ih - h, bw, h, 4)}" fill="var(--series)"/>`;
+    const xl = xLabelFor(b, i, buckets.length);
+    if (xl != null)
+      s += `<text x="${padL + i * band + band / 2}" y="${H - 6}" text-anchor="middle">${xl}</text>`;
+    s += `<rect x="${padL + i * band}" y="${padT}" width="${band}" height="${ih}" fill="transparent" data-tip="${tipFor(b)}"/>`;
+  });
+  s += '</svg>';
+  host.innerHTML = s;
+  bindTips(host);
+}
+
+function charts(rows) {
+  // price histogram
+  const prices = rows.map(x => x.price_eur).filter(v => v != null);
+  const hHost = $('histo');
+  if (!prices.length) { hHost.innerHTML = '<div style="color:var(--muted);padding:30px 0;text-align:center">no prices</div>'; }
+  else {
+    const min = Math.min(...prices), max = Math.max(...prices);
+    const step = Math.max(50, niceStep(max - min || 1, 12)); // never sub-50-euro buckets
+    const start = Math.floor(min / step) * step;
+    const n = Math.max(1, Math.ceil((max - start + 1) / step));
+    const buckets = Array.from({length: n}, (_, i) => ({
+      lo: start + i * step, hi: start + (i + 1) * step, count: 0,
+    }));
+    for (const p of prices) buckets[Math.min(n - 1, Math.floor((p - start) / step))].count++;
+    const lblEvery = Math.ceil(n / 5);
+    barChart(hHost, buckets,
+      b => `€${fmt(b.lo)}–${fmt(b.hi)}<br><b>${b.count}</b> listing${b.count === 1 ? '' : 's'}`,
+      (b, i) => i % lblEvery === 0 ? '€' + compact(b.lo) : null);
+  }
+  // listings per year
+  const years = rows.map(x => x.year).filter(v => v != null);
+  const yHost = $('years');
+  if (!years.length) { yHost.innerHTML = '<div style="color:var(--muted);padding:30px 0;text-align:center">no years</div>'; }
+  else {
+    const y0 = Math.min(...years), y1 = Math.max(...years);
+    const buckets = Array.from({length: y1 - y0 + 1}, (_, i) => ({year: y0 + i, count: 0}));
+    for (const y of years) buckets[y - y0].count++;
+    const lblEvery = Math.ceil(buckets.length / 8);
+    barChart(yHost, buckets,
+      b => `${b.year}<br><b>${b.count}</b> listing${b.count === 1 ? '' : 's'}`,
+      (b, i) => i % lblEvery === 0 ? String(b.year) : null);
+  }
+}
+
+/* ---------- compare ---------- */
+function renderTray() {
+  const sel = L.filter(x => compare.has(key(x)));
+  $('tray').classList.toggle('open', sel.length > 0);
+  $('traythumbs').innerHTML = sel.map(x => x.thumbnail
+    ? `<img src="${esc(x.thumbnail)}" alt="" title="${esc(x.title)}">`
+    : `<span class="noimg" title="${esc(x.title)}"></span>`).join('');
+  $('comparego').textContent = `Compare (${sel.length})`;
+  $('comparego').disabled = sel.length < 2;
+}
+function stanceCell(x) {
+  if (x.trade_stance === 'yes') return '<span class="tstance yes">✓ accepts trades</span>';
+  if (x.trade_stance === 'no') return '<span class="tstance no">✗ refuses trades</span>';
+  return '<span class="tstance unk">? not mentioned</span>';
+}
+function openCompare() {
+  const sel = L.filter(x => compare.has(key(x)));
+  if (sel.length < 2) return;
+  const rows = [
+    ['Photo', x => x.thumbnail ? `<img src="${esc(x.thumbnail)}" alt="">` : '—'],
+    ['Title', x => `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title)}</a>`],
+    ['Price', x => `<span class="num">${x.price_eur != null ? fmt(x.price_eur) + ' €' : '—'}</span>`],
+    ['Year', x => `<span class="num">${x.year ?? '—'}</span>`],
+    ['Mileage', x => `<span class="num">${x.mileage_km != null ? fmt(x.mileage_km) + ' km' : '—'}</span>`],
+    ['Engine', x => esc(x.engine || '—')],
+    ['Location', x => esc(x.location || '—')],
+    ['Seller', x => `${esc(x.seller_type)} · ${esc(x.site)}`],
+    ['Trades', stanceCell],
+    ['Published', x => x.published_at ? new Date(x.published_at).toLocaleDateString() : '—'],
+    ['Description', x => `<div class="cdesc">${esc(x.description || '—')}</div>`],
+  ];
+  $('cmpbody').innerHTML = '<table>' + rows.map(([lbl, fn]) =>
+    `<tr><td>${lbl}</td>${sel.map(x => `<td>${fn(x)}</td>`).join('')}</tr>`).join('') + '</table>';
+  $('overlay').classList.add('open');
+}
+$('comparego').addEventListener('click', openCompare);
+$('trayclear').addEventListener('click', () => { compare.clear(); render(); });
+$('cmpclose').addEventListener('click', () => $('overlay').classList.remove('open'));
+$('overlay').addEventListener('click', e => { if (e.target === $('overlay')) $('overlay').classList.remove('open'); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') $('overlay').classList.remove('open'); });
+
+/* ---------- filtering & render ---------- */
+const SORTS = {
+  price_asc:  (a, b) => (a.price_eur ?? 1e12) - (b.price_eur ?? 1e12),
+  price_desc: (a, b) => (b.price_eur ?? -1) - (a.price_eur ?? -1),
+  year_desc:  (a, b) => (b.year ?? 0) - (a.year ?? 0),
+  km_asc:     (a, b) => (a.mileage_km ?? 1e12) - (b.mileage_km ?? 1e12),
+  date_desc:  (a, b) => new Date(b.published_at ?? 0) - new Date(a.published_at ?? 0),
+};
+const num = id => { const v = $(id).value.trim(); return v === '' ? null : Number(v); };
+
+let lastRows = [];
+function render() {
+  Q = fold($('q').value.trim());
+  const site = $('site').value, model = $('model').value, seller = $('seller').value;
+  const trades = $('trades').value;
+  const pmin = num('pmin'), pmax = num('pmax');
+  const ymin = num('ymin'), ymax = num('ymax');
+  const kmin = num('kmin'), kmax = num('kmax');
+  const hideDup = $('hidedup').checked, favOnly = $('favonly').checked;
+  const showHidden = $('showhidden').checked;
+
+  let rows = L.filter(x =>
+    (!site || x.site === site) &&
+    (!model || x.model === model) &&
+    (!seller || x.seller_type === seller) &&
+    (!trades || (trades === 'unknown' ? x.trade_stance == null : x.trade_stance === trades)) &&
+    (pmin == null || (x.price_eur != null && x.price_eur >= pmin)) &&
+    (pmax == null || (x.price_eur != null && x.price_eur <= pmax)) &&
+    (ymin == null || (x.year != null && x.year >= ymin)) &&
+    (ymax == null || (x.year != null && x.year <= ymax)) &&
+    (kmin == null || (x.mileage_km != null && x.mileage_km >= kmin)) &&
+    (kmax == null || (x.mileage_km != null && x.mileage_km <= kmax)) &&
+    (!favOnly || favs.has(key(x))) &&
+    (showHidden || !hidden.has(key(x))) &&
+    (!Q || fold((x.title || '') + ' ' + (x.description || '')).includes(Q)));
+  if (hideDup) {
+    // keeper chosen among the filtered rows, so a bike never vanishes because
+    // its preferred cross-post copy was filtered out
+    const best = {};
+    for (const x of rows) {
+      const g = x.duplicate_group;
+      if (g && (!best[g] || dupScore(x) > dupScore(best[g]))) best[g] = x;
+    }
+    rows = rows.filter(x => !x.duplicate_group || best[x.duplicate_group] === x);
+  }
+  rows.sort(SORTS[$('sort').value]);
+  lastRows = rows;
+
+  $('grid').replaceChildren(...rows.map(card));
+  $('count').innerHTML = `${rows.length} <small>/ ${L.length} shown</small>`;
+  $('empty').style.display = rows.length ? 'none' : 'block';
+  // count only hidden ads that exist in the current snapshot (stale keys from
+  // re-scrapes stay stored but shouldn't inflate the label)
+  $('nhidden').textContent = L.filter(x => hidden.has(key(x))).length;
+  tiles(rows);
+  charts(rows);
+  renderTray();
+}
+
+const CONTROLS = ['q', 'site', 'model', 'seller', 'trades', 'pmin', 'pmax',
+                  'ymin', 'ymax', 'kmin', 'kmax', 'hidedup', 'favonly', 'showhidden', 'sort'];
+for (const id of CONTROLS) $(id).addEventListener('input', render);
+$('reset').addEventListener('click', () => {
+  for (const id of CONTROLS) {
+    const e = $(id);
+    if (e.type === 'checkbox') e.checked = (id === 'hidedup');
+    else if (e.tagName === 'SELECT') e.selectedIndex = 0;
+    else e.value = '';
+  }
+  render();
+});
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => charts(lastRows), 150);
+});
+
+/* ---------- re-scrape (works when served by scraper.py --serve) ---------- */
+{
+  const run = $('run'), yearInput = $('yearfrom'), status = $('runstatus');
+  if (DATA.year_from) yearInput.value = DATA.year_from;
+  if (!location.protocol.startsWith('http')) {
+    run.disabled = true;
+    status.textContent = 'start the page with start_server.bat (or: python scraper.py --serve) to enable scraping';
+  } else {
+    run.addEventListener('click', async () => {
+      run.disabled = true;
+      status.textContent = 'starting…';
+      const y = yearInput.value.trim();
+      try {
+        const resp = await fetch('/scrape' + (y ? '?year_from=' + encodeURIComponent(y) : ''),
+                                 {method: 'POST'});
+        if (!resp.ok) throw new Error((await resp.json()).error || resp.statusText);
+      } catch (err) {
+        status.textContent = 'failed: ' + err.message;
+        run.disabled = false;
+        return;
+      }
+      let failures = 0;
+      const timer = setInterval(async () => {
+        let s;
+        try { s = await (await fetch('/status')).json(); failures = 0; }
+        catch { // server briefly busy — but give up if it stays unreachable
+          if (++failures >= 10) {
+            clearInterval(timer);
+            status.textContent = 'lost contact with the server — is it still running?';
+            run.disabled = false;
+          }
+          return;
+        }
+        status.textContent = s.log[s.log.length - 1] || 'working…';
+        if (!s.running) {
+          clearInterval(timer);
+          if (s.error) { status.textContent = 'error: ' + s.error; run.disabled = false; }
+          else location.reload();
+        }
+      }, 1500);
+    });
+  }
+}
+
+render();
+</script>
+</body>
+</html>

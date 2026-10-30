@@ -1,0 +1,17 @@
+# Embedded Python distribution (local only)
+Python/
+
+# Python bytecode cache
+__pycache__/
+*.pyc
+
+# Generated scraper output
+listings.html
+listings.json
+
+# Scraper cache
+_cache/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
