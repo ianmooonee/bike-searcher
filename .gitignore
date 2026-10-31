@@ -15,3 +15,6 @@ _cache/
 # OS / editor noise
 .DS_Store
 Thumbs.db
+
+# Python virtualenv (created by start_server.sh)
+.venv/

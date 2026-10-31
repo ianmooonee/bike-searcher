@@ -34,9 +34,10 @@ from playwright.sync_api import Error as PlaywrightError, sync_playwright
 
 # ---------------------------------------------------------------- config
 
-# (make, display name, model slug). Both sites share the same slugs; an
-# unknown slug on Standvirtual silently falls back to *every* bike of the make,
-# so check a new one there (e.g. /motos/bmw/r-1250-gsa) before adding it.
+# (make, display name, model slug[, over_500cc]). Both sites share the same
+# slugs; an unknown slug on Standvirtual silently falls back to *every* bike of
+# the make, so check a new one there (e.g. /motos/bmw/r-1250-gsa) before adding
+# it. over_500cc limits broad families (CBR, YZF, Ninja) to 501 cc and up.
 MODELS = [
     ("Honda", "Africa Twin", "africa-twin"),
     ("Yamaha", "Ténéré 700", "tenere-700"),
@@ -45,7 +46,14 @@ MODELS = [
     ("BMW", "R 1200 GS Adventure", "r-1200-gsa"),
     ("BMW", "F 900 GS Adventure", "f-900-gsa"),
     ("Ducati", "DesertX", "desertx"),
+    ("Honda", "CBR", "cbr", True),
+    ("Yamaha", "YZF", "yzf", True),
+    ("Kawasaki", "Ninja", "ninja", True),
 ]
+
+OLX_OVER_500CC = ("search[filter_enum_cilindrada][0]=501-1000-cc"
+                  "&search[filter_enum_cilindrada][1]=mais-de-1000-cc")
+SV_OVER_500CC = "?search[filter_float_engine_capacity:from]=501"
 
 SEARCHES = [
     {
@@ -53,9 +61,11 @@ SEARCHES = [
         "make": make,
         "model": model,
         "model_slug": slug,
-        "url": f"https://www.standvirtual.com/motos/{make.lower()}/{slug}",
+        "url": f"https://www.standvirtual.com/motos/{make.lower()}/{slug}"
+               + (SV_OVER_500CC if big else ""),
     }
-    for make, model, slug in MODELS
+    for make, model, slug, *rest in MODELS
+    for big in [bool(rest and rest[0])]
 ] + [
     {
         "site": "olx",
@@ -63,9 +73,11 @@ SEARCHES = [
         "model": model,
         "model_slug": slug,
         "url": "https://www.olx.pt/carros-motos-e-barcos/motociclos-scooters/"
-               f"{make.lower()}/?search%5Bfilter_enum_modelo%5D%5B0%5D={slug}",
+               f"{make.lower()}/?search%5Bfilter_enum_modelo%5D%5B0%5D={slug}"
+               + (f"&{OLX_OVER_500CC}" if big else ""),
     }
-    for make, model, slug in MODELS
+    for make, model, slug, *rest in MODELS
+    for big in [bool(rest and rest[0])]
 ]
 
 OUTPUT_FILE = "listings.json"
@@ -115,7 +127,8 @@ def _get_requests(url):
 
 # Since Oct 2026 olx.pt's firewall returns 403 to every non-browser client
 # (python-requests and any curl build), so OLX pages are loaded in a real
-# headless browser — the installed Edge, so no browser download is needed.
+# headless browser — on Windows the installed Edge, so no browser download is
+# needed; elsewhere playwright's own Chromium (start_server.sh installs it).
 _browser = None  # (playwright, browser, page), started on the first OLX fetch
 
 
@@ -124,7 +137,8 @@ def _get_browser(url):
     if _browser is None:
         pw = sync_playwright().start()
         try:
-            browser = pw.chromium.launch(channel="msedge", headless=True)
+            browser = pw.chromium.launch(
+                channel="msedge" if sys.platform == "win32" else None, headless=True)
         except Exception:
             pw.stop()
             raise
