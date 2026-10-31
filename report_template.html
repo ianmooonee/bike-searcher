@@ -690,7 +690,7 @@ window.addEventListener('resize', () => {
   if (DATA.year_from) yearInput.value = DATA.year_from;
   if (!location.protocol.startsWith('http')) {
     run.disabled = true;
-    status.textContent = 'start the page with start_server.bat (or: python scraper.py --serve) to enable scraping';
+    status.textContent = 'start the page with start_server.bat / start_server.sh (or: python scraper.py --serve) to enable scraping';
   } else {
     run.addEventListener('click', async () => {
       run.disabled = true;

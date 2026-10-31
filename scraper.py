@@ -115,7 +115,8 @@ def _get_requests(url):
 
 # Since Oct 2026 olx.pt's firewall returns 403 to every non-browser client
 # (python-requests and any curl build), so OLX pages are loaded in a real
-# headless browser — the installed Edge, so no browser download is needed.
+# headless browser — on Windows the installed Edge, so no browser download is
+# needed; elsewhere playwright's own Chromium (start_server.sh installs it).
 _browser = None  # (playwright, browser, page), started on the first OLX fetch
 
 
@@ -124,7 +125,8 @@ def _get_browser(url):
     if _browser is None:
         pw = sync_playwright().start()
         try:
-            browser = pw.chromium.launch(channel="msedge", headless=True)
+            browser = pw.chromium.launch(
+                channel="msedge" if sys.platform == "win32" else None, headless=True)
         except Exception:
             pw.stop()
             raise
